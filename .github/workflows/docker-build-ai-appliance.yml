@@ -1,0 +1,128 @@
+name: Build Quil Docker image
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Quil version'
+        required: true
+        type: string
+      docker_user:
+        description: 'DockerHub username'
+        required: false
+        type: string
+        default: ravendb
+      docker_repo:
+        description: 'DockerHub repository'
+        required: false
+        type: string
+        default: ravendb/quil
+      github_repository:
+        description: 'Github repository'
+        required: false
+        type: string
+        default: ravendb/ravendb
+      github_ref:
+        description: 'Git ref of github_repository to build from'
+        required: false
+        type: string
+        default: feature/ai-appliance
+      platforms:
+        description: 'Comma-separated buildx platforms'
+        required: false
+        type: string
+        default: linux/amd64
+      dry_run:
+        description: 'Dry run - skip docker login/push'
+        required: false
+        type: string
+        default: ''
+
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Quil version'
+        required: true
+        type: string
+      docker_user:
+        description: 'DockerHub username'
+        required: false
+        type: string
+        default: ravendb
+      docker_repo:
+        description: 'DockerHub repository'
+        required: false
+        type: string
+        default: ravendb/quil
+      github_repository:
+        description: 'Github repository'
+        required: false
+        type: string
+        default: ravendb/ravendb
+      github_ref:
+        description: 'Git ref of github_repository to build from'
+        required: false
+        type: string
+        default: feature/ai-appliance
+      platforms:
+        description: 'Comma-separated buildx platforms'
+        required: false
+        type: string
+        default: linux/amd64
+      dry_run:
+        description: 'Dry run - skip docker login/push'
+        required: false
+        type: string
+        default: ''
+
+env:
+  DRY_RUN: ${{ inputs.dry_run }}
+
+jobs:
+  build:
+    name: Build & push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ${{ inputs.github_repository }}@${{ inputs.github_ref }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.github_repository }}
+          ref: ${{ inputs.github_ref }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute tags
+        id: tags
+        shell: bash
+        run: |
+          V="${{ inputs.version }}"
+          MINOR="${V%.*}"
+          REPO="${{ inputs.docker_repo }}"
+          echo "pinned=$REPO:$V"           >> "$GITHUB_OUTPUT"
+          echo "minor=$REPO:$MINOR-latest" >> "$GITHUB_OUTPUT"
+          echo "latest=$REPO:latest"       >> "$GITHUB_OUTPUT"
+
+      - name: Login to Docker Hub
+        if: ${{ inputs.dry_run == '' }}
+        run: docker login -u ${{ inputs.docker_user }} -p ${{ secrets.DOCKER_HUB_PASSWORD }}
+
+      - name: Build & push
+        shell: bash
+        run: |
+          PUSH_FLAG="--push"
+          if [ -n "$DRY_RUN" ]; then
+            PUSH_FLAG="--dry-run"
+          fi
+          ./docker/ai-appliance/scripts/build.sh \
+            --tag ${{ steps.tags.outputs.pinned }} \
+            --tag ${{ steps.tags.outputs.minor }} \
+            --tag ${{ steps.tags.outputs.latest }} \
+            --platforms ${{ inputs.platforms }} \
+            $PUSH_FLAG
+
+      - name: Docker logout
+        if: ${{ always() && inputs.dry_run == '' }}
+        run: docker logout || true
