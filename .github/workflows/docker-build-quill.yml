@@ -31,8 +31,13 @@ on:
         required: false
         type: string
         default: linux/amd64
+      push_latest_tags:
+        description: 'Also push :latest and :<minor>-latest floating tags'
+        required: false
+        type: boolean
+        default: true
       dry_run:
-        description: 'Dry run - skip docker login/push'
+        description: 'Dry run - build locally, skip login/push'
         required: false
         type: string
         default: ''
@@ -68,8 +73,13 @@ on:
         required: false
         type: string
         default: linux/amd64
+      push_latest_tags:
+        description: 'Also push :latest and :<minor>-latest floating tags'
+        required: false
+        type: boolean
+        default: true
       dry_run:
-        description: 'Dry run - skip docker login/push'
+        description: 'Dry run - build locally, skip login/push'
         required: false
         type: string
         default: ''
@@ -101,27 +111,35 @@ jobs:
           V="${{ inputs.version }}"
           MINOR="${V%.*}"
           REPO="${{ inputs.docker_repo }}"
-          echo "pinned=$REPO:$V"           >> "$GITHUB_OUTPUT"
-          echo "minor=$REPO:$MINOR-latest" >> "$GITHUB_OUTPUT"
-          echo "latest=$REPO:latest"       >> "$GITHUB_OUTPUT"
+          echo "pinned=$REPO:$V" >> "$GITHUB_OUTPUT"
+          if [ "${{ inputs.push_latest_tags }}" = "true" ]; then
+            echo "minor=$REPO:$MINOR-latest" >> "$GITHUB_OUTPUT"
+            echo "latest=$REPO:latest"       >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Login to Docker Hub
         if: ${{ inputs.dry_run == '' }}
-        run: docker login -u ${{ inputs.docker_user }} -p ${{ secrets.DOCKER_HUB_PASSWORD }}
+        env:
+          DOCKER_HUB_PASSWORD: ${{ secrets.DOCKER_HUB_PASSWORD }}
+        run: docker login -u ${{ inputs.docker_user }} -p "$DOCKER_HUB_PASSWORD"
 
       - name: Build & push
         shell: bash
         run: |
-          PUSH_FLAG="--push"
-          if [ -n "$DRY_RUN" ]; then
-            PUSH_FLAG="--dry-run"
+          extraTags=""
+          if [ -n "${{ steps.tags.outputs.minor }}" ]; then
+            extraTags="--tag ${{ steps.tags.outputs.minor }} --tag ${{ steps.tags.outputs.latest }}"
           fi
+
+          # Dry-run: build locally (no --push) so we still validate the image builds.
+          pushFlag="--push"
+          [ -n "$DRY_RUN" ] && pushFlag=""
+
           ./docker/quill/scripts/build.sh \
             --tag ${{ steps.tags.outputs.pinned }} \
-            --tag ${{ steps.tags.outputs.minor }} \
-            --tag ${{ steps.tags.outputs.latest }} \
+            $extraTags \
             --platforms ${{ inputs.platforms }} \
-            $PUSH_FLAG
+            $pushFlag
 
       - name: Docker logout
         if: ${{ always() && inputs.dry_run == '' }}
