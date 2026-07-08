@@ -1,9 +1,9 @@
-name: Build Quil Docker image
+name: Build Quill Docker image
 on:
   workflow_call:
     inputs:
       version:
-        description: 'Quil version'
+        description: 'Quill version'
         required: true
         type: string
       docker_user:
@@ -15,7 +15,7 @@ on:
         description: 'DockerHub repository'
         required: false
         type: string
-        default: ravendb/quil
+        default: ravendb/quill
       github_repository:
         description: 'Github repository'
         required: false
@@ -40,7 +40,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Quil version'
+        description: 'Quill version'
         required: true
         type: string
       docker_user:
@@ -52,7 +52,7 @@ on:
         description: 'DockerHub repository'
         required: false
         type: string
-        default: ravendb/quil
+        default: ravendb/quill
       github_repository:
         description: 'Github repository'
         required: false
@@ -116,7 +116,7 @@ jobs:
           if [ -n "$DRY_RUN" ]; then
             PUSH_FLAG="--dry-run"
           fi
-          ./docker/ai-appliance/scripts/build.sh \
+          ./docker/quill/scripts/build.sh \
             --tag ${{ steps.tags.outputs.pinned }} \
             --tag ${{ steps.tags.outputs.minor }} \
             --tag ${{ steps.tags.outputs.latest }} \
