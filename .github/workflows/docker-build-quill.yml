@@ -52,9 +52,6 @@ jobs:
           - arch: arm64v8
             platform: linux/arm64
             runs-on: ubuntu-24.04-arm
-          - arch: arm32v7
-            platform: linux/arm/v7
-            runs-on: ubuntu-latest # QEMU
       fail-fast: false
     runs-on: ${{ matrix.runs-on }}
     steps:
@@ -63,14 +60,6 @@ jobs:
         with:
           repository: ${{ inputs.github_repository }}
           ref: ${{ inputs.github_ref }}
-
-      - name: Set up QEMU
-        if: matrix.arch == 'arm32v7'
-        uses: docker/setup-qemu-action@v3
-
-      - name: Reset QEMU
-        if: matrix.arch == 'arm32v7'
-        run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes -c yes
 
       - name: Set up buildx
         uses: docker/setup-buildx-action@v3
@@ -121,17 +110,16 @@ jobs:
           VERSION="${{ inputs.version }}"
           MINOR=$(echo "$VERSION" | cut -d. -f1,2)
 
-          # The three per-arch tags each build job just pushed.
+          # The two per-arch tags each build job just pushed.
           AMD64="$REPO:$VERSION-amd64"
           ARM64="$REPO:$VERSION-arm64v8"
-          ARM32="$REPO:$VERSION-arm32v7"
 
           # Stitch them into a manifest published under the pinned version tag.
-          docker buildx imagetools create --tag "$REPO:$VERSION" "$AMD64" "$ARM64" "$ARM32"
+          docker buildx imagetools create --tag "$REPO:$VERSION" "$AMD64" "$ARM64"
 
           if [ "${{ inputs.push_latest_tags }}" = "true" ]; then
-            docker buildx imagetools create --tag "$REPO:$MINOR-latest" "$AMD64" "$ARM64" "$ARM32"
-            docker buildx imagetools create --tag "$REPO:latest"        "$AMD64" "$ARM64" "$ARM32"
+            docker buildx imagetools create --tag "$REPO:$MINOR-latest" "$AMD64" "$ARM64"
+            docker buildx imagetools create --tag "$REPO:latest"        "$AMD64" "$ARM64"
           fi
 
       - name: Docker logout
